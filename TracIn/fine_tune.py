@@ -1,0 +1,75 @@
+import time
+
+import torch
+import torch.nn as nn
+
+from data import prepare_CIFAR10
+from model import resnet34
+from utils import get_loss_acc
+
+
+def tune_resnet34():
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    # prepare dataloaders
+    trainloader, testloader = prepare_CIFAR10()
+
+    # prepare model
+    net = resnet34()
+    net.to(device)
+
+    # load pretrained weights
+    pretrained_weight_path = "model_weights/resnet34-333f7ec4.pth"
+    net.load_state_dict(torch.load(pretrained_weight_path, map_location=device))
+
+    # freeze all layers
+    for param in net.parameters():
+        param.requires_grad = False
+
+    # replace the fc layer
+    in_channel = net.fc.in_features
+    net.fc = nn.Linear(in_channel, 10)
+
+    # fine tune model
+    epochs = 50
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.01)
+    loss_function = nn.CrossEntropyLoss()
+    save_path = "model_weights/resnet34_cifar10.pth"
+    print("Trained on {}".format(device))
+    net.to(device)
+
+    best_test_acc = 0
+    net.train()
+    for epoch in range(50):
+        for X_batch, Y_batch in trainloader:
+            X_batch.to(device)
+            Y_batch.to(device)
+            # forward
+            logits = net(X_batch)
+            loss = loss_function(logits, Y_batch)
+            # backward
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        # evaluate
+        with torch.no_grad():
+            net.eval()
+            # evaluate train
+            train_loss, train_acc = get_loss_acc(net, trainloader, nn.CrossEntropyLoss())
+            # evaluate test
+            test_loss, test_acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
+
+        print("Epoch{}/{}  train loss: {}  test loss: {}  train acc: {}  test acc: {}".format(epoch+1, epochs,
+                                                                                              train_loss, test_loss,
+                                                                                              train_acc, test_acc))
+
+        # save model weights if it's the best
+        if test_acc > best_test_acc:
+            best_test_acc = test_acc
+            torch.save(net.state_dict(), save_path)
+            print("Saved")
+
+
+if __name__ == "__main__":
+    tune_resnet34()

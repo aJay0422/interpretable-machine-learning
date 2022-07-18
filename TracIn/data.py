@@ -5,12 +5,14 @@ import torchvision
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 
+from utils import mydataset
+
 def dataset_category_get(category_num):
     """
     Get images with label == category_num for both train and test dataset
     :param category_num: which category of image want to get
     :return: img_all_train: shape(500, 3, 224, 224), 500 images from train dataset
-             img_all_test: shape(100, 3, 224, 2240, 100 images from test dataset
+             img_all_test: shape(100, 3, 224, 224), 100 images from test dataset
     """
     data_transform = {
         "train": transforms.Compose([transforms.Resize(256),
@@ -36,7 +38,7 @@ def dataset_category_get(category_num):
         break
     for test_image, test_label in testloader:
         break
-    print(torch.sum(test_label==category_num))
+
     img_all_train = torch.zeros(500, 3, 224, 224)
     train_image_num = 0
     for i in range(10000):
@@ -56,6 +58,40 @@ def dataset_category_get(category_num):
             break
 
     return img_all_train, img_all_test
+
+
+def prepare_CIFAR10():
+    data_transform = {
+        "train": transforms.Compose([transforms.Resize(256),
+                                     transforms.CenterCrop(224),
+                                     transforms.ToTensor(),
+                                     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]),
+        "val": transforms.Compose([transforms.Resize(256),
+                                   transforms.CenterCrop(224),
+                                   transforms.ToTensor(),
+                                   transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+    }
+
+    # load CIFAR10 train and test dataset
+    train_set = torchvision.datasets.CIFAR10(root="datasets/CIFAR10/", train=True,
+                                             download=False, transform=data_transform["train"])
+    test_set = torchvision.datasets.CIFAR10(root="datasets/CIFAR10/", train=False,
+                                            download=False, transform=data_transform["val"])
+    X_train = train_set.data.transpose((0, 3, 1, 2))
+    X_test = test_set.data.transpose((0, 3, 1, 2))
+    print()
+    Y_train = train_set.targets
+    Y_test = test_set.targets
+    train_set = mydataset(X_train, Y_train)
+    test_set = mydataset(X_test, Y_test)
+
+    trainloader = DataLoader(train_set, batch_size=256,
+                             shuffle=True, num_workers=8)
+    testloader = DataLoader(test_set, batch_size=64,
+                            shuffle=False, num_workers=8)
+
+    return trainloader, testloader
+
 
 
 # if __name__ == "__main__":
