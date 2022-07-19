@@ -34,10 +34,10 @@ def dataset_category_get(category_num):
                              shuffle=False, num_workers=0)
     testloader = DataLoader(test_set, batch_size=2000,
                             shuffle=False, num_workers=0)
-    for train_image, train_label in trainloader:
-        break
-    for test_image, test_label in testloader:
-        break
+    train_iter = iter(trainloader)
+    train_image, train_label = next(train_iter)
+    test_iter = iter(testloader)
+    test_image, test_label = next(test_iter)
 
     img_all_train = torch.zeros(500, 3, 224, 224)
     train_image_num = 0
@@ -60,17 +60,25 @@ def dataset_category_get(category_num):
     return img_all_train, img_all_test
 
 
-def prepare_CIFAR10():
-    data_transform = {
-        "train": transforms.Compose([transforms.Resize(256),
-                                     transforms.CenterCrop(224),
-                                     transforms.ToTensor(),
-                                     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]),
-        "val": transforms.Compose([transforms.Resize(256),
-                                   transforms.CenterCrop(224),
-                                   transforms.ToTensor(),
-                                   transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
-    }
+def prepare_CIFAR10(img_size=32, seed=20220718):
+    if img_size == 32:
+        data_transform = {
+            "train": transforms.Compose([transforms.ToTensor(),
+                                         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]),
+            "val": transforms.Compose([transforms.ToTensor(),
+                                       transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+        }
+    elif img_size == 224:
+        data_transform = {
+            "train": transforms.Compose([transforms.Resize(256),
+                                         transforms.CenterCrop(224),
+                                         transforms.ToTensor(),
+                                         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]),
+            "val": transforms.Compose([transforms.Resize(256),
+                                       transforms.CenterCrop(224),
+                                       transforms.ToTensor(),
+                                       transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+        }
 
     # load CIFAR10 train and test dataset
     train_set = torchvision.datasets.CIFAR10(root="datasets/CIFAR10/", train=True,

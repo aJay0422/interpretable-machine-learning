@@ -14,7 +14,7 @@ img_all_train, img_all_test = dataset_category_get(category_num)   # (500,3,224,
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# create the nerwork
+# create the network
 net = resnet34()
 in_channel = net.fc.in_features
 net.fc = nn.Linear(in_channel, 10)   # using CIFAR10

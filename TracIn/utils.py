@@ -33,3 +33,17 @@ class mydataset(Dataset):
 
     def __len__(self):
         return len(self.Label)
+
+
+def get_tracin(a, b):
+    """
+    get tracin score by 2 lists of gradients
+    :param a: a List of gradient
+    :param b: a List of gradient
+    :return: inner product of 2 gradient
+    """
+    assert len(a) == len(b), "2 list of gradient must have the same length"
+    return sum([torch.dot(at.flatten(), bt.flatten()) for at, bt in zip(a, b)])
+
+
+def select_val
