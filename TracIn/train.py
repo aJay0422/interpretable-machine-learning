@@ -95,8 +95,8 @@ def train_CNN_CIFAR10(epochs,
     net.train()
     for epoch in range(epochs):
         for X_batch, Y_batch in trainloader:
-            X_batch.to(device)
-            Y_batch.to(device)
+            X_batch = X_batch.to(device)
+            Y_batch = Y_batch.to(device)
             # forward
             logits = net(X_batch)
             loss = loss_function(logits, Y_batch)
@@ -123,8 +123,12 @@ def train_CNN_CIFAR10(epochs,
             torch.save(net.state_dict(), save_path)
             print("Saved")
 
+        # # save model
+        # torch.save(net.state_dict(), "CNN_CIFAR10_epoch{}.pth".format(epoch + 1))
+
+
 if __name__ == "__main__":
     seed = 20220718
-    trainloader, testloader = prepare_CIFAR10(img_size=32, seed=seed)
-    train_CNN_CIFAR10(epochs=3, trainloader=trainloader, testloader=testloader,
+    trainloader, valloader, testloader = prepare_CIFAR10(img_size=32)
+    train_CNN_CIFAR10(epochs=3, trainloader=trainloader, testloader=valloader,
                       seed=seed, save_path="model_weights/CNN_CIFAR10_3epochs.pth")

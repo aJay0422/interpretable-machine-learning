@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 import torchvision
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 
 from utils import mydataset
 
@@ -60,7 +61,7 @@ def dataset_category_get(category_num):
     return img_all_train, img_all_test
 
 
-def prepare_CIFAR10(img_size=32, seed=20220718):
+def prepare_CIFAR10(img_size=32):
     if img_size == 32:
         data_transform = {
             "train": transforms.Compose([transforms.ToTensor(),
@@ -87,26 +88,24 @@ def prepare_CIFAR10(img_size=32, seed=20220718):
                                             download=False, transform=data_transform["val"])
     X_train = train_set.data.transpose((0, 3, 1, 2))
     X_test = test_set.data.transpose((0, 3, 1, 2))
-    print()
     Y_train = train_set.targets
     Y_test = test_set.targets
+    X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, stratify=Y_train, test_size=0.2)   # split 5000 validation data
+
     train_set = mydataset(X_train, Y_train)
+    val_set = mydataset(X_val, Y_val)
     test_set = mydataset(X_test, Y_test)
 
     trainloader = DataLoader(train_set, batch_size=256,
                              shuffle=True, num_workers=8)
+    valloader = DataLoader(val_set, batch_size=64,
+                           shuffle=False, num_workers=8)
     testloader = DataLoader(test_set, batch_size=64,
                             shuffle=False, num_workers=8)
+    print(len(X_train), len(X_val), len(X_test))
+    return trainloader, valloader, testloader
 
-    return trainloader, testloader
 
 
-
-# if __name__ == "__main__":
-#     img_all_train, img_all_test = dataset_category_get(0)
-#     import matplotlib.pyplot as plt
-#     for i in range(5):
-#         plt.imshow(img_all_train[i * 10].permute(1, 2, 0))
-#         plt.show()
-#         plt.imshow(img_all_test[i * 10].permute(1, 2, 0))
-#         plt.show()
+if __name__ == "__main__":
+    prepare_CIFAR10()

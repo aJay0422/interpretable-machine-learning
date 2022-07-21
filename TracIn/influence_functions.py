@@ -68,9 +68,10 @@ def tracin_multi_single(net, zs_train, z_test, labels_train, label_test, loss=nn
     for i in range(n_train):
         score = tracin_single_single(net, zs_train[i], z_test,
                                      labels_train[i], label_test)
-        scores.append(score)
+        scores.append(score.cpu())
 
     return np.array(scores)
+
 
 def tracin_multi_multi(net, zs_train, zs_test, labels_train, labels_test, loss=nn.CrossEntropyLoss()):
     """
@@ -96,6 +97,129 @@ def tracin_multi_multi(net, zs_train, zs_test, labels_train, labels_test, loss=n
     return scores
 
 
+def select_validation(net, valloader):
+    """
+    Select validation samples based on their accuracy on 3 checkpoints
+    :param net: the model to load checkpoints
+    :param valloader: whole validation data
+    :return: selected validation samples
+    """
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    net.to(device)
+
+    path1 = "model_weights/CNN_CIFAR10_epoch1.pth"
+    path2 = "model_weights/CNN_CIFAR10_epoch2.pth"
+    path3 = "model_weights/CNN_CIFAR10_epoch3.pth"
+
+    correct_wrong = []
+
+    # epoch1
+    net.load_state_dict(torch.load(path1, map_location=device))
+    correct_wrong_epoch = []
+    for X_batch, Y_batch in valloader:
+        logits = net(X_batch)
+        y_pred = torch.argmax(logits, dim=1)
+        correct_wrong_epoch.append(y_pred == Y_batch)
+    correct_wrong_epoch = torch.hstack(correct_wrong_epoch)
+    correct_wrong.append(correct_wrong_epoch)
+
+    # epoch2
+    net.load_state_dict(torch.load(path2, map_location=device))
+    correct_wrong_epoch = []
+    for X_batch, Y_batch in valloader:
+        logits = net(X_batch)
+        y_pred = torch.argmax(logits, dim=1)
+        correct_wrong_epoch.append(y_pred == Y_batch)
+    correct_wrong_epoch = torch.hstack(correct_wrong_epoch)
+    correct_wrong.append(correct_wrong_epoch)
+
+    # epoch3
+    net.load_state_dict(torch.load(path3, map_location=device))
+    correct_wrong_epoch = []
+    for X_batch, Y_batch in valloader:
+        logits = net(X_batch)
+        y_pred = torch.argmax(logits, dim=1)
+        correct_wrong_epoch.append(y_pred == Y_batch)
+    correct_wrong_epoch = torch.hstack(correct_wrong_epoch)
+    correct_wrong.append(correct_wrong_epoch)
+
+    correct_wrong = torch.vstack(correct_wrong)
+    correct_count = torch.sum(correct_wrong, dim=0)   # a tensor of length 10000
+
+    selected_samples = {}
+    for i in range(4):
+        tmp_X = valloader.dataset.Data[correct_count == i]
+        tmp_Y = valloader.dataset.Label[correct_count == i]
+        tmp_n = len(tmp_Y)
+        selected_idx = np.random.permutation(tmp_n)[:2]
+        selected_samples[i] = (tmp_X[selected_idx], tmp_Y[selected_idx])
+
+    np.savez("datasets/selected_cifar10/selected_val.npz", selected_val=selected_samples)
+    return selected_samples
+
+
+def select_train(net, trainloader, selected_val):
+    X_train = trainloader.dataset.Data
+    Y_train = trainloader.dataset.Label
+    n_train = len(Y_train)
+
+    selected_train = []
+
+    # level 1 validation samples (hardest samples, 0 correct in the 3 epochs)
+    X_val, Y_val = selected_val[0]
+    selected_train1 = np.arange(n_train)
+    for i, z_val in enumerate(X_val):
+        score = tracin_multi_single(net, X_train, z_val, Y_train, Y_val[i])
+        lower = np.quantile(score, 0)
+        upper = np.quantile(score, 0.25)
+        selected_idx = np.arange(n_train)[(lower <= score) * (score <= upper)]
+        selected_train1 = np.intersect1d(selected_train1, selected_idx)
+    selected_train.append(selected_train1)
+    print(len(selected_train1))
+
+    # level 2 validation samples
+    X_val, Y_val = selected_val[1]
+    selected_train2 = np.arange(n_train)
+    for i, z_val in enumerate(X_val):
+        score = tracin_multi_single(net, X_train, z_val, Y_train, Y_val[i])
+        lower = np.quantile(score, 0.25)
+        upper = np.quantile(score, 0.5)
+        selected_idx = np.arange(n_train)[(lower <= score) * (score <= upper)]
+        selected_train2 = np.intersect1d(selected_train2, selected_idx)
+    selected_train.append(selected_train2)
+    print(len(selected_train2))
+
+    # level 3 validation samples
+    X_val, Y_val = selected_val[2]
+    selected_train3 = np.arange(n_train)
+    for i, z_val in enumerate(X_val):
+        score = tracin_multi_single(net, X_train, z_val, Y_train, Y_val[i])
+        lower = np.quantile(score, 0.5)
+        upper = np.quantile(score, 0.75)
+        selected_idx = np.arange(n_train)[(lower <= score) * (score <= upper)]
+        selected_train3 = np.intersect1d(selected_train3, selected_idx)
+    selected_train.append(selected_train3)
+    print(len(selected_train3))
+
+    # level 4 validation samples (easiest samples, 3 correct in the 3 epochs)
+    X_val, Y_val = selected_val[3]
+    selected_train4 = np.arange(n_train)
+    for i, z_val in enumerate(X_val):
+        score = tracin_multi_single(net, X_train, z_val, Y_train, Y_val[i])
+        lower = np.quantile(score, 0.75)
+        upper = np.quantile(score, 1)
+        selected_idx = np.arange(n_train)[(lower <= score) * (score <= upper)]
+        selected_train4 = np.intersect1d(selected_train4, selected_idx)
+    selected_train.append(selected_train4)
+    print(len(selected_train4))
+
+    selected_train_idx = np.unique(np.hstack(selected_train))
+
+    selected_X_train = X_train[selected_train_idx]
+    selected_Y_train = Y_train[selected_train_idx]
+    np.savez("datasets/selected_cifar10/selected_train.npz", X=selected_X_train, Y=selected_Y_train)
+    return selected_X_train, selected_Y_train
+
 
 if __name__ == "__main__":
 
@@ -107,7 +231,7 @@ if __name__ == "__main__":
     net.load_state_dict(torch.load("model_weights/CNN_CIFAR10.pth", map_location=device))
 
     # prepare data
-    trainloader, testloader = prepare_CIFAR10(img_size=32)
+    trainloader, valloader, testloader = prepare_CIFAR10(img_size=32)
     img_train = trainloader.dataset.Data[0:100] # samples from train set
     label_train = trainloader.dataset.Label[0:100]
     img_test = testloader.dataset.Data[0:20]   # a single sample from test set
