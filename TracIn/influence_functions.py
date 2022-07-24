@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.autograd import grad
 import numpy as np
 import time
+import multiprocessing as mp
 
 from model import CNN_CIFAR10
 from data import prepare_CIFAR10
@@ -37,6 +38,7 @@ def tracin_single_single(net, z_train, z_test, label_train, label_test, loss_fun
 
 
     # calculate gradient
+    ptime = time.time()
     logits_train = net(z_train.to(device))
     loss_train = loss_function(logits_train, label_train.to(device))
     grad_train = grad(loss_train, net.parameters())
@@ -45,9 +47,18 @@ def tracin_single_single(net, z_train, z_test, label_train, label_test, loss_fun
     loss_test = loss_function(logits_test, label_test.to(device))
     grad_test = grad(loss_test, net.parameters())
     grad_test = [g for g in grad_test]
+    time_gradient = time.time() - ptime
+
 
     # get tracin score
+    ptime = time.time()
     score = get_tracin(grad_train, grad_test)
+    time_tracin = time.time() - ptime
+
+    total_time = time_gradient + time_tracin
+
+    print("{:.2f}% of time used calculating gradient".format(time_gradient / total_time * 100))
+    print("{:.2f}% of time used calculating inner product".format(time_tracin / total_time * 100))
 
     return score
 
@@ -73,7 +84,7 @@ def tracin_multi_single(net, zs_train, z_test, labels_train, label_test, loss=nn
     return np.array(scores)
 
 
-def tracin_multi_multi(net, zs_train, zs_test, labels_train, labels_test, loss=nn.CrossEntropyLoss()):
+def tracin_multi_multi(net, zs_train, zs_test, labels_train, labels_test, loss_function=nn.CrossEntropyLoss()):
     """
     Compute tracin scores of multiple samples versus multiple samples
     :param net: the corresponding model
@@ -84,17 +95,67 @@ def tracin_multi_multi(net, zs_train, zs_test, labels_train, labels_test, loss=n
     :param loss: loss function to calculate loss for a single sample
     :return: tracin scores, a ndarray of shape (n_train, n_test)
     """
-    n_train = zs_train.shape[0]
-    n_test = zs_test.shape[0]
-    scores = np.zeros((n_train, n_test))
-    for i in range(n_test):
-        img_test = zs_test[i]
-        label_test = labels_test[i]
-        this_scores = tracin_multi_single(net, zs_train, img_test,
-                                          labels_train, label_test)
-        scores[:, i] = this_scores
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    return scores
+    # prepare model
+    net.to(device)
+    net.eval()
+
+    # prepare data
+    n_train = len(zs_train)
+    n_test = len(zs_test)
+
+    ptime = time.time()
+
+    # calculate train gradient
+    train_gradients = []
+    for i in range(n_train):
+        z_train = zs_train[i].unsqueeze(0)
+        label_train = labels_train[i].unsqueeze(0)
+        logits_train = net(z_train.to(device))
+        loss_train = loss_function(logits_train, label_train.to(device))
+        grad_train = grad(loss_train, net.parameters())
+        grad_train = [g for g in grad_train]
+        train_gradients.append(grad_train)
+
+    # calculate test gradient
+    test_gradients = []
+    for i in range(n_test):
+        z_test = zs_test[i].unsqueeze(0)
+        label_test = labels_test[i].unsqueeze(0)
+        logits_test = net(z_test.to(device))
+        loss_test = loss_function(logits_test, label_test.to(device))
+        grad_test = grad(loss_test, net.parameters())
+        grad_tes = [g for g in grad_test]
+        test_gradients.append(grad_test)
+
+    time_gradient = time.time() - ptime
+
+    ptime = time.time()
+
+    scores = np.zeros((n_train, n_test))
+    for i, grad_train in enumerate(train_gradients):
+        for j, grad_test in enumerate(test_gradients):
+            score = get_tracin(grad_train, grad_test)
+            scores[i, j] = score
+
+    time_tracin = time.time() - ptime
+
+    print(time_gradient, time_tracin)
+
+    return score
+
+    # n_train = zs_train.shape[0]
+    # n_test = zs_test.shape[0]
+    # scores = np.zeros((n_train, n_test))
+    # for i in range(n_test):
+    #     img_test = zs_test[i]
+    #     label_test = labels_test[i]
+    #     this_scores = tracin_multi_single(net, zs_train, img_test,
+    #                                       labels_train, label_test)
+    #     scores[:, i] = this_scores
+    #
+    # return scores
 
 
 def select_validation(net, valloader):
@@ -221,8 +282,10 @@ def select_train(net, trainloader, selected_val):
     return selected_X_train, selected_Y_train
 
 
-if __name__ == "__main__":
 
+
+
+if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # prepare model and load weight
@@ -232,16 +295,32 @@ if __name__ == "__main__":
 
     # prepare data
     trainloader, valloader, testloader = prepare_CIFAR10(img_size=32)
-    img_train = trainloader.dataset.Data[0:100] # samples from train set
-    label_train = trainloader.dataset.Label[0:100]
-    img_test = testloader.dataset.Data[0:20]   # a single sample from test set
-    label_test = testloader.dataset.Label[0:20]
+    img_train = trainloader.dataset.Data[0:10000] # samples from train set
+    label_train = trainloader.dataset.Label[0:10000]
+    img_test = testloader.dataset.Data[0:10]   # a single sample from test set
+    label_test = testloader.dataset.Label[0:10]
 
-    print("Started")
+    # print("Started")
+    # ptime = time.time()
+    # # num_cores = int(mp.cpu_count())
+    # # pool = mp.Pool(num_cores)
+    # # param_dict = [(net, img_train, img_test[i], label_train, label_test[i]) for i in range(10)]
+    # # results = [pool.apply_async(tracin_multi_single, args=argument) for argument in param_dict]
+    # # results = [p.get() for p in results]
+    #
+    # results = tracin_multi_multi(net, img_train, img_test, label_train, label_test)
+    #
+    # ctime = time.time()
+    # n = 1000
+    # print("Infer time: {}({} seconds every 10000 infers)".format(int(ctime - ptime),
+    #     int((ctime - ptime) / 1000 * 10000)))
+
     ptime = time.time()
-    scores = tracin_multi_multi(net, img_train, img_test, label_train, label_test)
+    result = tracin_multi_multi(net, img_train, img_test, label_train, label_test)
     ctime = time.time()
-    n = scores.shape[0] * scores.shape[1]
+
     print("Infer time: {}({} seconds every 10000 infers)".format(int(ctime - ptime),
-        int((ctime - ptime) / n * 10000)))
+        int((ctime - ptime)) / (len(label_train) * len(label_test)) * 10000))
+
+
 

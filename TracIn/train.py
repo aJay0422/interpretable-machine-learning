@@ -2,10 +2,12 @@ import time
 
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
+import numpy as np
 
 from data import prepare_CIFAR10
 from model import resnet34, CNN_CIFAR10
-from utils import get_loss_acc
+from utils import get_loss_acc, mydataset
 
 
 def tune_resnet34():
@@ -74,10 +76,17 @@ def tune_resnet34():
 def train_CNN_CIFAR10(epochs,
                       trainloader,
                       testloader,
-                      seed=20220718, load_path=None, save_path="model_weights/CNN_CIFAR10.pth"):
+                      seed=20220718, get_summary=False,
+                      load_path=None, save_path="model_weights/CNN_CIFAR10.pth"):
     # setup
     torch.manual_seed(seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    if get_summary:
+        summary = {"train loss":[],
+                   "test loss":[],
+                   "train acc":[],
+                   "test acc":[]}
 
     # prepare model
     net = CNN_CIFAR10(num_classes=10)
@@ -92,9 +101,11 @@ def train_CNN_CIFAR10(epochs,
     net.to(device)
 
     best_test_acc = 0
-    net.train()
     for epoch in range(epochs):
+        net.train()
+        net.to(device)
         for X_batch, Y_batch in trainloader:
+
             X_batch = X_batch.to(device)
             Y_batch = Y_batch.to(device)
             # forward
@@ -116,6 +127,11 @@ def train_CNN_CIFAR10(epochs,
         print("Epoch{}/{}  train loss: {}  test loss: {}  train acc: {}  test acc: {}".format(epoch + 1, epochs,
                                                                                               train_loss, test_loss,
                                                                                               train_acc, test_acc))
+        if get_summary:
+            summary["train loss"].append(train_loss)
+            summary["test loss"].append(test_loss)
+            summary["train acc"].append(train_acc)
+            summary["test acc"].append(test_acc)
 
         # save model weights of it's the best
         if test_acc > best_test_acc:
@@ -123,12 +139,18 @@ def train_CNN_CIFAR10(epochs,
             torch.save(net.state_dict(), save_path)
             print("Saved")
 
-        # # save model
-        # torch.save(net.state_dict(), "CNN_CIFAR10_epoch{}.pth".format(epoch + 1))
+    if get_summary:
+        return summary
 
 
 if __name__ == "__main__":
     seed = 20220718
+    file = np.load("datasets/selected_cifar10/selected_train.npz")
+    selected_X_train = file["X"]
+    selected_Y_train = file["Y"]
+    selected_trainset = mydataset(selected_X_train, selected_Y_train)
+    selected_trainloader = DataLoader(selected_trainset, batch_size=256,
+                                      shuffle=False)
     trainloader, valloader, testloader = prepare_CIFAR10(img_size=32)
-    train_CNN_CIFAR10(epochs=3, trainloader=trainloader, testloader=valloader,
-                      seed=seed, save_path="model_weights/CNN_CIFAR10_3epochs.pth")
+    summary = train_CNN_CIFAR10(epochs=50, trainloader=selected_trainloader, testloader=valloader,
+                      seed=seed, get_summary=True, save_path="model_weights/CNN_CIFAR10_selectedtrain.pth")
