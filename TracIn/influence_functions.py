@@ -133,6 +133,32 @@ def tracin_multi_multi(net, zs_train, zs_test, labels_train, labels_test, loss_f
     return scores
 
 
+def tracin_self(net, zs_train, labels_train, loss_function=nn.CrossEntropyLoss()):
+    device = torch.device("cuda: 0" if torch.cuda.is_available() else "cpu")
+
+    # prepare model
+    net.to(device)
+    net.eval()
+
+    # prepare data
+    n_train = len(zs_train)
+
+    scores = np.zeros(n_train)
+
+    # calculate self-influence
+    for i in range(n_train):
+        z_train = zs_train[i].unsqueeze(0)
+        label_train = labels_train[i].unsqueeze(0)
+        logits_train = net(z_train.to(device))
+        loss_train = loss_function(logits_train, label_train.to(device))
+        grad_train = grad(loss_train, net.parameters())
+        grad_train = [g for g in grad_train]
+        score = get_tracin(grad_train, grad_train)
+        scores[i] = score
+
+    return scores
+
+
 def select_validation(net, valloader, method="V1"):
     """
     Select validation samples based on their accuracy on 3 checkpoints
@@ -222,13 +248,10 @@ def select_validation(net, valloader, method="V1"):
         return {"X": X_selected, "Y": Y_selected}
 
 
-
-
 def select_train(net, trainloader, selected_val, method="T1"):
     # prepare model
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     net.to(device)
-    net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch3.pth", map_location=device))
 
     # prepare data
     X_train = trainloader.dataset.Data
@@ -241,8 +264,14 @@ def select_train(net, trainloader, selected_val, method="T1"):
 
     # compute TracIn
     # TracIn_all = np.load("datasets/selected_cifar10/TracIn_all.npz", allow_pickle=True)["TracIn_all"]
-    TracIn_all = tracin_multi_multi(net, X_train, selected_val_X_all, Y_train, selected_val_Y_all)
+    TracIn_all = np.zeros((n_train, n_test))
+    for i in range(1, 4):
+        # load weight
+        net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch{}.pth".format(i), map_location=device))
+        TracIn_all = TracIn_all + tracin_multi_multi(net, X_train, selected_val_X_all, Y_train, selected_val_Y_all)
     print("TracIn calculation completed")
+    # net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch3.pth", map_location=device))
+    # TracIn_all = tracin_multi_multi(net, X_train, selected_val_X_all, Y_train, selected_val_Y_all)
 
     if method == "T1":
         TracIn_mean = np.mean(TracIn_all, axis=1)
@@ -288,9 +317,6 @@ def select_train(net, trainloader, selected_val, method="T1"):
         X_selected = X_train[index]
         Y_selected = Y_train[index]
         return {"X": X_selected, "Y": Y_selected}
-
-
-
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ from utils import mydataset
 
 if __name__ == "__main__":
     experiment_path = "./experiment1"
-    settings = [("V1", "T5"), ("V2", "T6")]
+    settings = [("V1", "T1"), ("V2", "T2"), ("V1", "T5"), ("V2", "T6")]
     load_path = "model_weights/CNN_CIFAR10_epoch3.pth"   # the model has been trained 3 epochs
 
     for (methodV, methodT) in settings:
