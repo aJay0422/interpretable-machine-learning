@@ -61,7 +61,7 @@ def dataset_category_get(category_num):
     return img_all_train, img_all_test
 
 
-def prepare_CIFAR10(img_size=32):
+def prepare_CIFAR10(img_size=32, mode="tvt"):
     if img_size == 32:
         data_transform = {
             "train": transforms.Compose([transforms.ToTensor(),
@@ -90,6 +90,17 @@ def prepare_CIFAR10(img_size=32):
     X_test = test_set.data.transpose((0, 3, 1, 2))
     Y_train = train_set.targets
     Y_test = test_set.targets
+
+    if mode == "tt":
+        train_set = mydataset(X_train, Y_train)
+        test_set = mydataset(X_test, Y_test)
+        trainloader = DataLoader(train_set, batch_size=256,
+                                 shuffle=True)
+        testloader = DataLoader(train_set, batch_size=64,
+                                shuffle=False)
+        print(len(X_train), len(X_test))
+        return trainloader, testloader
+
     X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, stratify=Y_train, test_size=0.2)   # split 5000 validation data
 
     train_set = mydataset(X_train, Y_train)
@@ -97,11 +108,11 @@ def prepare_CIFAR10(img_size=32):
     test_set = mydataset(X_test, Y_test)
 
     trainloader = DataLoader(train_set, batch_size=256,
-                             shuffle=True, num_workers=8)
+                             shuffle=True)
     valloader = DataLoader(val_set, batch_size=64,
-                           shuffle=False, num_workers=8)
+                           shuffle=False)
     testloader = DataLoader(test_set, batch_size=64,
-                            shuffle=False, num_workers=8)
+                            shuffle=False)
     print(len(X_train), len(X_val), len(X_test))
     return trainloader, valloader, testloader
 
