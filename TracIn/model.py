@@ -172,6 +172,8 @@ class CNN_CIFAR10(nn.Module):
         self.flatten = nn.Flatten(start_dim=1)
         self.fc = nn.Linear(256 * 4 * 4, 10)
 
+        self.apply(_init_weights)
+
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
@@ -192,6 +194,21 @@ class CNN_CIFAR10(nn.Module):
         logits = self.fc(output)
 
         return logits
+
+
+def _init_weights(m):
+    torch.manual_seed(42)
+    if isinstance(m, nn.Linear):
+        nn.init.trunc_normal_(m.weight, std=0.01)
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
+    elif isinstance(m, nn.BatchNorm1d):
+        nn.init.zeros_(m.bias)
+        nn.init.ones_(m.weight)
+    elif isinstance(m, nn.Conv2d):
+        nn.init.trunc_normal_(m.weight, std=0.01)
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
 
 
 def resnet34(num_classes=1000, include_top=True):
@@ -231,7 +248,7 @@ def resnext101_32x8d(num_classes=1000, include_top=True):
                   width_per_group=width_per_group)
 
 if __name__ == "__main__":
-    model = resnet34()
-    img = torch.zeros(1, 3, 224, 224)
-    print(model)
-    print(model(img).shape)
+    model1 = CNN_CIFAR10()
+    model2 = CNN_CIFAR10()
+    print(model1.fc.weight)
+    print(model2.fc.weight)

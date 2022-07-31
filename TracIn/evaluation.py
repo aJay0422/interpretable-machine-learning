@@ -1,23 +1,42 @@
 import torch
 import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
 
 from model import CNN_CIFAR10
 from data import prepare_CIFAR10
 from utils import get_loss_acc
 
 
-settings = ["V1T1", "V2T2", "V1T5", "V2T6"]
-test_accs = {}
+test_acc_tracin = []
+test_acc_random = []
 
-trainloader, valloader, testloader = prepare_CIFAR10()
+# prepare data
+trainloader, testloader = prepare_CIFAR10(mode="tt")
 
-for setting in settings:
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    net = CNN_CIFAR10()
-    weight_path = "experiment1/{}/CNN_CIFAR10_{}.pth".format(setting, setting)
-    net.load_state_dict(torch.load(weight_path, map_location=device))
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+net = CNN_CIFAR10()
+net.to(device)
 
+# baseline
+net.load_state_dict(torch.load("experiment3/CNN_CIFAR10_baseline_epoch70.pth", map_location=device))
+_, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
+test_acc_tracin.append(acc)
+test_acc_random.append(acc)
+
+for i in range(2, 10):
+    # tracin
+    net.load_state_dict(torch.load("experiment3/pick small/CNN_CIFAR10_drop{}.pth".format(int(i * 10)), map_location=device))
     _, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
-    test_accs[setting] = acc
+    test_acc_tracin.append(acc)
+    # random
+    net.load_state_dict(torch.load("experiment3/pick small/CNN_CIFAR10_drop{}random.pth".format(int(i * 10)), map_location=device))
+    _, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
+    test_acc_random.append(acc)
 
-print(test_accs)
+xrange = [0] + [0.1 * i for i in range(2, 10)]
+plt.plot(xrange, test_acc_tracin, '-bo', label="TracIn")
+plt.plot(xrange, test_acc_random, '-ro', label="Random")
+plt.title("Pick Small Self-Influence")
+plt.legend()
+plt.show()

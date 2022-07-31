@@ -79,6 +79,7 @@ def train_CNN_CIFAR10(epochs,
                       seed=20220718, get_summary=False,
                       load_path=None, save_path="model_weights/CNN_CIFAR10.pth"):
     # setup
+    torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
