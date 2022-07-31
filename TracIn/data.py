@@ -96,7 +96,7 @@ def prepare_CIFAR10(img_size=32, mode="tvt"):
         test_set = mydataset(X_test, Y_test)
         trainloader = DataLoader(train_set, batch_size=256,
                                  shuffle=True)
-        testloader = DataLoader(train_set, batch_size=64,
+        testloader = DataLoader(test_set, batch_size=64,
                                 shuffle=False)
         print(len(X_train), len(X_test))
         return trainloader, testloader

@@ -134,7 +134,7 @@ def tracin_multi_multi(net, zs_train, zs_test, labels_train, labels_test, loss_f
 
 
 def tracin_self(net, zs_train, labels_train, loss_function=nn.CrossEntropyLoss()):
-    device = torch.device("cuda: 0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # prepare model
     net.to(device)
