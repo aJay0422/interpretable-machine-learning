@@ -136,7 +136,7 @@ def train_CNN_CIFAR10(epochs,
             summary["test acc"].append(test_acc)
 
         # save model weights of it's the best
-        if test_acc > best_test_acc:
+        if test_acc >= best_test_acc:
             best_test_acc = test_acc
             torch.save(net.state_dict(), save_path)
             print("Saved")
