@@ -158,3 +158,4 @@ if __name__ == "__main__":
     # net.load_state_dict(torch.load("model_weights/CNN_CIFAR10.pth"))
     # test_loss, test_acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
     # print(test_acc)
+    torch.optim.Adam()

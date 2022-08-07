@@ -301,7 +301,7 @@ def select_train(net, trainloader, selected_val, method="T1"):
         index = np.arange(n_train)
         for i in range(n_test):
             index_tmp = (TracIn_all[:, i] < 0)
-            indx = np.intersect1d(index, index_tmp)
+            index = np.intersect1d(index, index_tmp)
         X_selected = X_train[index]
         Y_selected = Y_train[index]
         return {"X": X_selected, "Y": Y_selected}

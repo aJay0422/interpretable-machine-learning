@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 
 from model import CNN_CIFAR10
 from data import prepare_CIFAR10
@@ -93,19 +94,30 @@ def TracInCP():
     np.save("experiment3/self_influence.npy", self_influence)
 
 
-def experiment(drop_ratio=0.1):
+def experiment(drop_ratio=0.1, mode="middle"):
+    """
+    :param drop_ratio: the ratio of dropped samples
+    :param mode: which part to keep
+    """
     trainloader, testloader = prepare_CIFAR10(mode="tt")
     X_train = trainloader.dataset.Data
     Y_train = trainloader.dataset.Label
 
     self_influence = np.load("experiment3/self_influence.npy", allow_pickle=True)
     n_train = len(self_influence)
-    n_keep = int(n_train * (1 - drop_ratio))
-    keep_index = np.argsort(self_influence)[:n_keep]
-    random_keep_index = list(np.random.permutation(n_train)[:n_keep])
-    # n_drop = int(n_train * drop_ratio)
-    # keep_index = np.argsort(self_influence)[n_drop:]
-    # random_keep_index = list(np.random.permutation(n_train)[n_drop:])
+
+    if mode == "small":
+        n_keep = int(n_train * (1 - drop_ratio))
+        keep_index = np.argsort(self_influence)[:n_keep]
+        random_keep_index = list(np.random.permutation(n_train)[:n_keep])
+    elif mode == "large":
+        n_drop = int(n_train * drop_ratio)
+        keep_index = np.argsort(self_influence)[n_drop:]
+        random_keep_index = list(np.random.permutation(n_train)[n_drop:])
+    elif mode == "middle":
+        n_drop_half = int(n_train * drop_ratio / 2)
+        keep_index = np.argsort(self_influence)[n_drop_half:-n_drop_half]
+        random_keep_index = list(np.random.permutation(n_train)[n_drop_half:-n_drop_half])
 
     X_train_new = X_train[keep_index]
     Y_train_new = Y_train[keep_index]
@@ -118,19 +130,70 @@ def experiment(drop_ratio=0.1):
 
     epochs = 70
     print("TracIn: {} samples kept".format(len(Y_train_new)))
-    train_CNN_CIFAR10(epochs, trainloader_new, testloader, save_path = "experiment3/pick small/CNN_CIFAR10_drop{}.pth".format(int(drop_ratio * 100)))
+    train_CNN_CIFAR10(epochs, trainloader_new, testloader, save_path = "experiment3/pick {}/CNN_CIFAR10_drop{}.pth".format(mode, int(drop_ratio * 100)))
     print("Random: {} samples kept".format(len(Y_train_random)))
-    train_CNN_CIFAR10(epochs, trainloader_random, testloader, save_path = "experiment3/pick small/CNN_CIFAR10_drop{}random.pth".format(int(drop_ratio * 100)))
+    train_CNN_CIFAR10(epochs, trainloader_random, testloader, save_path = "experiment3/pick {}/CNN_CIFAR10_drop{}random.pth".format(mode, int(drop_ratio * 100)))
 
+
+def check():
+    trainloader, testloader = prepare_CIFAR10(mode="tt")
+    X_train = trainloader.dataset.Data
+    Y_train = trainloader.dataset.Label
+
+    self_influence = np.load("experiment3/self_influence.npy", allow_pickle=True)
+    rank = np.argsort(self_influence)
+    for i in range(10):
+        rank_mean = np.mean(rank[Y_train == i])
+        print("Class: {}. Mean Rank: {}".format(i, rank_mean))
+
+
+def evaluation(mode="middle"):
+    test_acc_tracin = []
+    test_acc_random = []
+
+    # prepare data
+    trainloader, testloader = prepare_CIFAR10(mode="tt")
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    net = CNN_CIFAR10()
+    net.to(device)
+
+    # baseline
+    net.load_state_dict(torch.load("experiment3/CNN_CIFAR10_baseline_epoch70.pth", map_location=device))
+    _, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
+    test_acc_tracin.append(acc)
+    test_acc_random.append(acc)
+
+    for i in range(2, 10):
+        # tracin
+        net.load_state_dict(
+            torch.load("experiment3/pick {}/CNN_CIFAR10_drop{}.pth".format(mode, int(i * 10)), map_location=device))
+        _, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
+        test_acc_tracin.append(acc)
+        # random
+        net.load_state_dict(
+            torch.load("experiment3/pick {}/CNN_CIFAR10_drop{}random.pth".format(mode, int(i * 10)), map_location=device))
+        _, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
+        test_acc_random.append(acc)
+
+    xrange = [0] + [0.1 * i for i in range(2, 10)]
+    plt.plot(xrange, test_acc_tracin, '-bo', label="Pick {}".format(mode))
+    plt.plot(xrange, test_acc_random, '-ro', label="Pick Random")
+    plt.title("Different Pick Rule")
+    plt.xlabel("drop ratio")
+    plt.ylabel("test acc")
+    plt.legend()
+    plt.show()
 
 
 if __name__ == "__main__":
-    experiment_path = "./experiment3"
+    experiment_path = "./experiment3/pick middle"
     if not os.path.exists(experiment_path):
         os.mkdir(experiment_path)
 
-    for i in range(9, 1, -1):
-        drop_ratio = i * 0.1
-        experiment(drop_ratio)
+    # drop_ratios = [0.1*i for i in range(2, 10)]
+    # for drop_ratio in drop_ratios:
+    #     experiment(drop_ratio, mode="small")
+    #     experiment(drop_ratio, mode="middle")
 
-    # baseline()
+    evaluation("small")
