@@ -7,7 +7,7 @@ import numpy as np
 
 from data import prepare_CIFAR10
 from model import resnet34, CNN_CIFAR10
-from utils import get_loss_acc, mydataset
+from utils import get_loss_acc, mydataset, device
 
 
 def tune_resnet34():
@@ -102,6 +102,18 @@ def train_CNN_CIFAR10(epochs,
     print("Trained on {}".format(device))
     net.to(device)
 
+    # initial
+    with torch.no_grad():
+        net.eval()
+        # evaluate train
+        train_loss, train_acc = get_loss_acc(net, trainloader, loss_function)
+        # evaluate test
+        test_loss, test_acc = get_loss_acc(net, testloader, loss_function)
+
+    print("Epoch{}/{}  train loss: {}  test loss: {}  train acc: {}  test acc: {}".format(0, epochs,
+                                                                                          train_loss, test_loss,
+                                                                                          train_acc, test_acc))
+
     best_test_acc = 0
     for epoch in range(epochs):
         net.train()
@@ -149,13 +161,7 @@ def train_CNN_CIFAR10(epochs,
 
 if __name__ == "__main__":
     trainloader, valloader, testloader = prepare_CIFAR10(img_size=32)
-    seed = 20220718
-    summary = train_CNN_CIFAR10(epochs=3, trainloader=trainloader, testloader=valloader,
-                      seed=seed, get_summary=False, save_path="model_weights/CNN_CIFAR10.pth")
-
-
-    # net = CNN_CIFAR10()
-    # net.load_state_dict(torch.load("model_weights/CNN_CIFAR10.pth"))
-    # test_loss, test_acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
-    # print(test_acc)
-    torch.optim.Adam()
+    net = CNN_CIFAR10().to(device)
+    net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch3.pth", map_location=device))
+    _, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
+    print(acc)

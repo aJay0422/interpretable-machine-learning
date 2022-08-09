@@ -258,20 +258,32 @@ def select_train(net, trainloader, selected_val, method="T1"):
     Y_train = trainloader.dataset.Label
     n_train = len(Y_train)
 
-    selected_val_X_all = selected_val["X"]
-    selected_val_Y_all = selected_val["Y"]
-    n_test = len(selected_val_Y_all)
+    X_val = selected_val["X"]
+    Y_val = selected_val["Y"]
+    n_test = len(Y_val)
 
     # compute TracIn
-    # TracIn_all = np.load("datasets/selected_cifar10/TracIn_all.npz", allow_pickle=True)["TracIn_all"]
-    TracIn_all = np.zeros((n_train, n_test))
-    for i in range(1, 4):
-        # load weight
-        net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch{}.pth".format(i), map_location=device))
-        TracIn_all = TracIn_all + tracin_multi_multi(net, X_train, selected_val_X_all, Y_train, selected_val_Y_all)
-    print("TracIn calculation completed")
-    # net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch3.pth", map_location=device))
-    # TracIn_all = tracin_multi_multi(net, X_train, selected_val_X_all, Y_train, selected_val_Y_all)
+    if method in ["T1", "T2", "T3", "T4", "T5", "T6"]:
+        TracIn_all = np.zeros((n_train, n_test))
+        for i in range(1, 4):
+            # load weight
+            net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch{}.pth".format(i), map_location=device))
+            TracIn_all = TracIn_all + tracin_multi_multi(net, X_train, X_val, Y_train, Y_val)
+        print("TracIn calculation completed")
+    elif method in ["T7", "T8", "T9", "T10", "T11", "T12"]:   # calculate tracin by class
+        TracIn_by_cls = {}
+        for cls in range(10):
+            cls_idx_train = (Y_train == cls)
+            cls_idx_val = (Y_val == cls)
+            n_train_tmp = len(Y_train[cls_idx_train])
+            n_val_tmp = len(Y_val[cls_idx_val])
+            TracIn_by_cls[cls] = np.zeros((n_train_tmp, n_val_tmp))
+            for i in range(1, 4):
+                # load weigth
+                net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch{}.pth".format(i), map_location=device))
+                TracIn_by_cls[cls] += tracin_multi_multi(net, X_train[cls_idx_train], X_val[cls_idx_val],
+                                                         Y_train[cls_idx_train], Y_val[cls_idx_val])
+        print("TracIn calculation completed")
 
     if method == "T1":
         TracIn_mean = np.mean(TracIn_all, axis=1)
@@ -317,6 +329,83 @@ def select_train(net, trainloader, selected_val, method="T1"):
         X_selected = X_train[index]
         Y_selected = Y_train[index]
         return {"X": X_selected, "Y": Y_selected}
+    elif method == "T7":
+        X_selected = []
+        Y_selected = []
+        for cls in range(10):
+            TracIn_mean = np.mean(TracIn_by_cls[cls], axis=1)
+            index = (TracIn_mean > 0)
+            X_selected.append(X_train[Y_train == cls][index])
+            Y_selected.append(Y_train[Y_train == cls][index])
+        X_selected = np.concatenate(X_selected, axis=0)
+        Y_selected = np.concatenate(Y_selected, axis=0)
+        return {"X": X_selected, "Y": Y_selected}
+    elif method == "T8":
+        X_selected = []
+        Y_selected = []
+        for cls in range(10):
+            TracIn_mean = np.mean(TracIn_by_cls[cls], axis=1)
+            index = (TracIn_mean < 0)
+            X_selected.append(X_train[Y_train == cls][index])
+            Y_selected.append(Y_train[Y_train == cls][index])
+        X_selected = np.concatenate(X_selected, axis=0)
+        Y_selected = np.concatenate(Y_selected, axis=0)
+        return {"X": X_selected, "Y": Y_selected}
+    elif method == "T9":
+        X_selected = []
+        Y_selected = []
+        for cls in range(10):
+            TracIn_mean = np.mean(TracIn_by_cls[cls], axis=1)
+            lower = np.quantile(TracIn_mean, q=0.5)
+            upper = np.quantile(TracIn_mean, q=1)
+            index = (TracIn_mean >= lower) & (TracIn_mean <= upper) & (TracIn_mean > 0)
+            X_selected.append(X_train[Y_train == cls][index])
+            Y_selected.append(Y_train[Y_train == cls][index])
+        X_selected = np.concatenate(X_selected, axis=0)
+        Y_selected = np.concatenate(Y_selected, axis=0)
+        return {"X": X_selected, "Y": Y_selected}
+    elif method == "T10":
+        X_selected = []
+        Y_selected = []
+        for cls in range(10):
+            TracIn_mean = np.mean(TracIn_by_cls[cls], axis=1)
+            lower = np.quantile(TracIn_mean, q=0)
+            upper = np.quantile(TracIn_mean, q=0.5)
+            index = (TracIn_mean >= lower) & (TracIn_mean <= upper) & (TracIn_mean > 0)
+            X_selected.append(X_train[Y_train == cls][index])
+            Y_selected.append(Y_train[Y_train == cls][index])
+        X_selected = np.concatenate(X_selected, axis=0)
+        Y_selected = np.concatenate(Y_selected, axis=0)
+        return {"X": X_selected, "Y": Y_selected}
+    elif method == "T11":
+        X_selected = []
+        Y_selected = []
+        for cls in range(10):
+            TracIn_mean = np.mean(TracIn_by_cls[cls], axis=1)
+            lower = np.quantile(TracIn_mean, q=0.75)
+            upper = np.quantile(TracIn_mean, q=1)
+            index = (TracIn_mean >= lower) & (TracIn_mean <= upper) & (TracIn_mean > 0)
+            X_selected.append(X_train[Y_train == cls][index])
+            Y_selected.append(Y_train[Y_train == cls][index])
+        X_selected = np.concatenate(X_selected, axis=0)
+        Y_selected = np.concatenate(Y_selected, axis=0)
+        return {"X": X_selected, "Y": Y_selected}
+    elif method == "T12":
+        X_selected = []
+        Y_selected = []
+        for cls in range(10):
+            TracIn_mean = np.mean(TracIn_by_cls[cls], axis=1)
+            lower = np.quantile(TracIn_mean, q=0)
+            upper = np.quantile(TracIn_mean, q=0.25)
+            index = (TracIn_mean >= lower) & (TracIn_mean <= upper) & (TracIn_mean > 0)
+            X_selected.append(X_train[Y_train == cls][index])
+            Y_selected.append(Y_train[Y_train == cls][index])
+        X_selected = np.concatenate(X_selected, axis=0)
+        Y_selected = np.concatenate(Y_selected, axis=0)
+        return {"X": X_selected, "Y": Y_selected}
+
+
+
 
 
 if __name__ == "__main__":
@@ -327,12 +416,20 @@ if __name__ == "__main__":
     net.to(device)
     net.load_state_dict(torch.load("model_weights/CNN_CIFAR10.pth", map_location=device))
 
-    ptime = time.time()
     # prepare data
     trainloader, valloader, testloader = prepare_CIFAR10(img_size=32)
-    selected_val = select_validation(net, valloader, method="V1")
-    selected_train = select_train(net, trainloader, selected_val, method="T1")
+    X_train = trainloader.dataset.Data[:10000]
+    Y_train = trainloader.dataset.Label[:10000]
+    X_val = valloader.dataset.Data[:5]
+    Y_val = valloader.dataset.Label[:5]
 
+    ptime = time.time()
+    tracin1 = tracin_multi_multi(net, X_train, X_val, Y_train, Y_val)
+    ctime = time.time()
+    print(ctime - ptime)
+
+    ptime = time.time()
+    tracin2 = tracin_multi_multi(net, X_train, X_val, Y_train, Y_val)
     ctime = time.time()
     print(ctime - ptime)
 
