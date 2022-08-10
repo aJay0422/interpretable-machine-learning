@@ -279,7 +279,7 @@ def select_train(net, trainloader, selected_val, method="T1"):
             n_val_tmp = len(Y_val[cls_idx_val])
             TracIn_by_cls[cls] = np.zeros((n_train_tmp, n_val_tmp))
             for i in range(1, 4):
-                # load weigth
+                # load weight
                 net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch{}.pth".format(i), map_location=device))
                 TracIn_by_cls[cls] += tracin_multi_multi(net, X_train[cls_idx_train], X_val[cls_idx_val],
                                                          Y_train[cls_idx_train], Y_val[cls_idx_val])
@@ -403,6 +403,7 @@ def select_train(net, trainloader, selected_val, method="T1"):
         X_selected = np.concatenate(X_selected, axis=0)
         Y_selected = np.concatenate(Y_selected, axis=0)
         return {"X": X_selected, "Y": Y_selected}
+
 
 
 

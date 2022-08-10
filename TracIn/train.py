@@ -162,6 +162,4 @@ def train_CNN_CIFAR10(epochs,
 if __name__ == "__main__":
     trainloader, valloader, testloader = prepare_CIFAR10(img_size=32)
     net = CNN_CIFAR10().to(device)
-    net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch3.pth", map_location=device))
-    _, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
-    print(acc)
+    train_CNN_CIFAR10(70, trainloader, valloader)

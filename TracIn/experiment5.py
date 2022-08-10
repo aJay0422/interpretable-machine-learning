@@ -13,7 +13,7 @@ from utils import device, mydataset, get_loss_acc
 from data import prepare_CIFAR10
 from model import CNN_CIFAR10
 from train import train_CNN_CIFAR10
-from influence_functions import select_train
+from influence_functions import tracin_multi_multi, select_train
 
 
 def select_validation(net, valloader, n=30, mode="hard"):
@@ -46,7 +46,17 @@ def select_validation(net, valloader, n=30, mode="hard"):
         for i in range(10):
             return_index.append(sort_index[Y_val[sort_index] == i][:(n // 10)])
         return_index = np.hstack(return_index)
-    return {"X": X_val[return_index], "Y": Y_val[return_index]}
+
+    # softmax
+    cls_weight = []
+    for i in range(10):
+        weight = np.mean(entropies[Y_val == i])
+        cls_weight.append(weight)
+    cls_weight = np.array(cls_weight) / np.sqrt(10)
+    cls_weight = np.exp(cls_weight)
+    cls_weight = cls_weight / np.sum(cls_weight)
+
+    return {"X": X_val[return_index], "Y": Y_val[return_index]}, cls_weight
 
 
 def experiment():
@@ -127,7 +137,7 @@ def evaluation2(keep_nums):
 
 
 def val_loss_analysis(net, valloader):
-    net.load_state_dict(torch.load("model_weights/CNN_CIFAR10_epoch3.pth", map_location=device))
+    net.load_state_dict(torch.load("model_weights/CNN_CIFAR10.pth", map_location=device))
     net.to(device)
 
     # calculate entropy loss for each sample in valloader
@@ -150,9 +160,43 @@ def val_loss_analysis(net, valloader):
     plt.show()
 
 
+def val_loss_decrease_visualize(valloader):
+    net = CNN_CIFAR10().to(device)
+    loss_function = nn.CrossEntropyLoss()
+    X_val = valloader.dataset.Data
+    Y_val = valloader.dataset.Label
+    cls_entropy_by_time = []
+    for epoch in range(55, 71):
+        net.load_state_dict(torch.load(f"model_weights/CNN_CIFAR10_epoch{epoch}.pth", map_location=device))
+        entropies = []
+        with torch.no_grad():
+            net.eval()
+            for X, Y in zip(X_val, Y_val):
+                X = X.to(device).unsqueeze(0)
+                Y = Y.to(device).unsqueeze(0)
+                logit = net(X)
+                loss = loss_function(logit, Y)
+                entropies.append(loss.cpu().item())
+        entropies = np.array(entropies)
+        cls_entropy = []
+        for i in range(10):
+            m = np.mean(entropies[Y_val == i])
+            cls_entropy.append(m)
+        cls_entropy_by_time.append(cls_entropy)
+
+    cls_entropy_by_time = np.vstack(cls_entropy_by_time)
+    labels = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
+    for i in range(10):
+        plt.plot(cls_entropy_by_time[:, i], label=labels[i])
+    plt.legend(prop={"size": 6})
+    plt.show()
+
+
+
 if __name__ == "__main__":
     net = CNN_CIFAR10()
     trainloader, valloader, testloader = prepare_CIFAR10()
-    val_loss_analysis(net, valloader)
+    SV, cls_weight = select_validation(net, valloader)
+    print(cls_weight)
 
     stop = None
