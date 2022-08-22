@@ -153,7 +153,7 @@ def train_CNN_CIFAR10(epochs,
             torch.save(net.state_dict(), save_path)
             print("Saved")
 
-        # torch.save(net.state_dict(), "model_weights/CNN_CIFAR10_epoch{}.pth".format(epoch+1))
+        # torch.save(net.state_dict(), "model_weights/weights_70epochs/CNN_CIFAR10_epoch{}.pth".format(epoch+1))
 
     if get_summary:
         return summary

@@ -1,11 +1,12 @@
 import torch
 import numpy as np
+import torch.nn as nn
 from torch.utils.data import Dataset
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-def get_loss_acc(model, dataloader, criterion):
+def get_loss_acc(model, dataloader, criterion=nn.CrossEntropyLoss()):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
     model.eval()

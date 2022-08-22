@@ -101,7 +101,7 @@ def prepare_CIFAR10(img_size=32, mode="tvt"):
         print(len(X_train), len(X_test))
         return trainloader, testloader
 
-    X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, stratify=Y_train, test_size=0.2)   # split 5000 validation data
+    X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, stratify=Y_train, test_size=0.2, random_state=42)   # split 10000 validation data
 
     train_set = mydataset(X_train, Y_train)
     val_set = mydataset(X_val, Y_val)
@@ -119,4 +119,7 @@ def prepare_CIFAR10(img_size=32, mode="tvt"):
 
 
 if __name__ == "__main__":
-    prepare_CIFAR10()
+    train1, val1, test2 = prepare_CIFAR10()
+    train2, val2, test2 = prepare_CIFAR10()
+
+    stop = None

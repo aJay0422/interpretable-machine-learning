@@ -6,8 +6,9 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import numpy as np
+import matplotlib.pyplot as plt
 
-from utils import device, mydataset
+from utils import device, mydataset, get_loss_acc
 from influence_functions import tracin_multi_multi
 from data import prepare_CIFAR10
 from model import CNN_CIFAR10
@@ -113,8 +114,11 @@ def selecet_train(net, trainloader, selected_val, cls_weight, mode="high"):
     return {"X": X_selected, "Y": Y_selected}
 
 
-def experiment():
-    experiment_path = "./experiment6"
+def experiment(d=9, from_beginning=False):
+    if from_beginning:
+        experiment_path = "./experiment6/from_beginning"
+    else:
+        experiment_path = "./experiment6"
     if not os.path.exists(experiment_path):
         os.mkdir(experiment_path)
 
@@ -124,12 +128,12 @@ def experiment():
     net = CNN_CIFAR10().to(device)
     for mv in MV:
         for mt in MT:
-            setting_path = experiment_path + "/{}{}".format(mv, mt)
+            setting_path = experiment_path + "/{}{}{}".format(mv, mt, d)
             if not os.path.exists(setting_path):
                 os.mkdir(setting_path)
 
             # select validation and train
-            selected_val, cls_weight = select_validation(net, valloader, mode=mv)
+            selected_val, cls_weight = select_validation(net, valloader, mode=mv, d=d)
             selected_train = selecet_train(net, trainloader, selected_val, cls_weight, mode=mt)
             np.savez(setting_path + "/selected_val.npz", X=selected_val["X"], Y=selected_val["Y"])
             np.savez(setting_path + "/selected_train.npz", X=selected_train["X"], Y=selected_train["Y"])
@@ -141,13 +145,177 @@ def experiment():
 
             # train model and save checkpoint
             n_train = len(selected_trainset.Label)
-            print(f"{mv}{mt}", end=" ")
+            print(f"{mv}{mt}{d}", end=" ")
             print("Trained on a dataset of {} samples".format(n_train))
-            save_path = setting_path + "/CNN_CIFAR10_{}{}.pth".format(mv, mt)
+            save_path = setting_path + "/CNN_CIFAR10_{}{}{}.pth".format(mv, mt, d)
+            if from_beginning:
+                load_path = None
+            else:
+                load_path = "model_weights/CNN_CIFAR10_epoch3.pth"
             train_CNN_CIFAR10(70, selected_trainloader, valloader,
-                              load_path="model_weights/CNN_CIFAR10_epoch3.pth", save_path=save_path)
+                              load_path=load_path, save_path=save_path)
+
+
+def n_SV():
+    net = CNN_CIFAR10().to(device)
+    net.load_state_dict(torch.load(f"model_weights/CNN_CIFAR10_epoch3.pth", map_location=device))
+    trainloader, valloader, testloader = prepare_CIFAR10()
+
+    # calculate entropy loss for each sample in valloader
+    loss_function = nn.CrossEntropyLoss()
+    entropies = []
+    X_val = valloader.dataset.Data
+    Y_val = valloader.dataset.Label
+    with torch.no_grad():
+        net.eval()
+        for X, Y in zip(X_val, Y_val):
+            X = X.to(device).unsqueeze(0)
+            Y = Y.to(device).unsqueeze(0)
+            logit = net(X)
+            loss = loss_function(logit, Y)
+            entropies.append(loss.cpu().item())
+    entropies = np.array(entropies)
+    sort_index = np.argsort(entropies)
+
+    # softmax
+    cls_weight = []
+    for i in range(10):
+        weight = np.mean(entropies[Y_val == i])
+        cls_weight.append(weight)
+
+    ds = [0.03, 0.1, 0.3, 1, 3, 9]
+    for d in ds:
+        cls_ratio = np.array(cls_weight) / np.sqrt(d)
+        cls_ratio = np.exp(cls_ratio)
+        cls_ratio = cls_ratio / np.sum(cls_ratio)
+        cls_ratio = cls_ratio / np.max(cls_ratio)
+        n_keep_cls = [int(4000 * ratio) for ratio in cls_ratio]
+        n_sv = np.sum(n_keep_cls)
+        print(f"d = {d}  n_SV = {n_sv}")
+
+
+def evaluation(from_beginning=False):
+    mv = ["hard", "easy"]
+    mt = ["high", "low"]
+    ds = [0.03, 0.1, 0.3, 1, 3, 9]
+    net = CNN_CIFAR10().to(device)
+    trainloader, valloader, testloader = prepare_CIFAR10()
+    for v in mv:
+        for t in mt:
+            for d in ds:
+                if from_beginning:
+                    setting_path = f"experiment6/from_beginning/{v}{t}{d}"
+                else:
+                    setting_path = f"experiment6/{v}{t}{d}"
+
+                weight_path = setting_path + f"/CNN_CIFAR10_{v}{t}{d}.pth"
+                net.load_state_dict(torch.load(weight_path, map_location=device))
+                _, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
+                file = np.load(setting_path + "/selected_train.npz", allow_pickle=True)
+                n_sv = len(file["Y"])
+                print("{} {}  Trained on {} samples  Test Acc: {:.2f}%".format(v, t, n_sv, acc * 100))
+
+    # baseline
+    net.load_state_dict(torch.load("model_weights/CNN_CIFAR10.pth", map_location=device))
+    _, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
+    print("Baseline  Trained on {} samples  Test Acc: {:.2f}%".format(40000, acc * 100))
+
+
+def random_keep(keep_nums=[34298, 30959, 26420, 20564, 15471, 11130], from_beginning=False):
+    for keep_num in keep_nums:
+        for i in range(5):
+            trainloader, valloader, testloader = prepare_CIFAR10()
+            n_train = len(trainloader.dataset.Label)
+            keep_index = list(np.random.permutation(n_train)[:keep_num])
+            X_train_keep = trainloader.dataset.Data[keep_index]
+            Y_train_keep = trainloader.dataset.Label[keep_index]
+            trainloader = DataLoader(mydataset(X_train_keep, Y_train_keep), batch_size=128, shuffle=True)
+
+            if from_beginning:
+                load_path = None
+                save_path = "experiment6/CNN_CIFAR10_rndkeep{}_{}_frombegin.pth".format(keep_num, i + 1)
+            else:
+                load_path = "model_weights/CNN_CIFAR10_epoch3.pth"
+                save_path = "experiment6/CNN_CIFAR10_rndkeep{}_{}.pth".format(keep_num, i + 1)
+            train_CNN_CIFAR10(70, trainloader, valloader, load_path=load_path, save_path=save_path)
+
+
+def evaluate_random_keep(keep_nums=[34298, 30959, 26420, 20564, 15471, 11130], from_beginning=False):
+    trainloader, valloader, testloader = prepare_CIFAR10()
+    net = CNN_CIFAR10().to(device)
+    for keep_num in keep_nums:
+        accs = []
+        for i in range(1, 6):
+            if from_beginning:
+                weight_path = "experiment6/CNN_CIFAR10_rndkeep{}_{}_frombegin.pth".format(keep_num, i)
+            else:
+                weight_path = "experiment6/CNN_CIFAR10_rndkeep{}_{}.pth".format(keep_num, i)
+            net.load_state_dict(torch.load(weight_path, map_location=device))
+            _, acc = get_loss_acc(net, testloader, nn.CrossEntropyLoss())
+            accs.append(acc)
+        m = np.mean(accs)
+        v = np.std(accs)
+        print(keep_num, m, v)
+
+
+def class_dist_check(d=9):
+    experiment_path = "experiment6/"
+    svs = ["hard", "easy"]
+    sts = ["high", "low"]
+    fig, ax = plt.subplots(2, 2, figsize=(16, 16))
+
+    for i, sv in enumerate(svs):
+        for j, st in enumerate(sts):
+            folder_name = sv + st + str(d)
+            folder_path = experiment_path + folder_name
+            file = np.load(folder_path + "/selected_train.npz", allow_pickle=True)
+            Y = file["Y"]
+            ax[i,j].hist(Y)
+            ax[i,j].title.set_text("{} {}".format(sv, st))
+    plt.title("n samples = {}".format(len(Y)))
+    plt.show()
+
+
+def class_acc_check(d=9):
+    trainloader, valloader, testloader = prepare_CIFAR10()
+    experiment_path = "experiment6/"
+    svs = ["hard", "easy"]
+    sts = ["high", "low"]
+    fig, ax = plt.subplots(2, 2, figsize=(16, 16))
+
+    for i, sv in enumerate(svs):
+        for j, st in enumerate(sts):
+            folder_name = sv + st + str(d)
+            folder_path = experiment_path + folder_name
+            net = CNN_CIFAR10().to(device)
+            net.load_state_dict(torch.load(folder_path + "/CNN_CIFAR10_" + folder_name + ".pth", map_location=device))
+            predictions = []
+            with torch.no_grad():
+                net.eval()
+                for X_batch, Y_batch in testloader:
+                    X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
+                    logits = net(X_batch)
+                    y_pred = torch.argmax(logits, dim=1).cpu()
+                    predictions.append(y_pred)
+
+            predictions = torch.hstack(predictions)
+            accs = []
+            Y_test = testloader.dataset.Label
+            for cls in range(10):
+                idx = (Y_test == cls)
+                acc = np.mean(predictions[idx].eq(Y_test[idx]).numpy())
+                accs.append(acc)
+
+            ax[i, j].plot(accs, "b.")
+            ax[i, j].title.set_text("{} {}".format(sv, st))
+
+    plt.show()
+
+
 
 
 
 if __name__ == "__main__":
-    experiment()
+    for i in [9, 3, 1, 0.3, 0.1, 0.03]:
+        class_dist_check(d=i)
+        class_acc_check(d=i)

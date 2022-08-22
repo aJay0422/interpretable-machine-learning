@@ -419,20 +419,17 @@ if __name__ == "__main__":
 
     # prepare data
     trainloader, valloader, testloader = prepare_CIFAR10(img_size=32)
-    X_train = trainloader.dataset.Data[:10000]
-    Y_train = trainloader.dataset.Label[:10000]
-    X_val = valloader.dataset.Data[:5]
-    Y_val = valloader.dataset.Label[:5]
+    tracin1 = tracin_self(net, trainloader.dataset.Data[:2], trainloader.dataset.Label[:2])
+    tracin2 = tracin_self(net, trainloader.dataset.Data[:2], trainloader.dataset.Label[:2])
+    print(tracin1)
+    print(tracin2)
 
-    ptime = time.time()
-    tracin1 = tracin_multi_multi(net, X_train, X_val, Y_train, Y_val)
-    ctime = time.time()
-    print(ctime - ptime)
-
-    ptime = time.time()
-    tracin2 = tracin_multi_multi(net, X_train, X_val, Y_train, Y_val)
-    ctime = time.time()
-    print(ctime - ptime)
+    tracin3 = tracin_multi_multi(net, trainloader.dataset.Data[:2], trainloader.dataset.Data[:2],
+                                 trainloader.dataset.Label[:2], trainloader.dataset.Label[:2])
+    tracin4 = tracin_multi_multi(net, trainloader.dataset.Data[:2], trainloader.dataset.Data[:2],
+                                 trainloader.dataset.Label[:2], trainloader.dataset.Label[:2])
+    print(tracin3)
+    print(tracin4)
 
 
     stop = None
