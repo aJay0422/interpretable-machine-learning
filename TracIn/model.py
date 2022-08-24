@@ -36,6 +36,7 @@ class BasicBlock(nn.Module):
 
 class Bottleneck(nn.Module):
     expansion = 4
+
     def __init__(self, in_channel, out_channel, stride=1, downsample=None,
                  groups=1, width_per_group=64):
         super(Bottleneck, self).__init__()

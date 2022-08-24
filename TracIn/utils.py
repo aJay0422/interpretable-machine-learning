@@ -31,6 +31,31 @@ def get_loss_acc(model, dataloader, criterion=nn.CrossEntropyLoss()):
     return total_loss, acc
 
 
+def get_acc_by_cls(model, dataloader, criterion=nn.CrossEntropyLoss()):
+    model.to(device)
+    with torch.no_grad():
+        model.eval()
+        Y_pred = []
+        Y_true = []
+        for X_batch, Y_batch in dataloader:
+            Y_true.append(Y_batch.numpy())
+            X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
+            logits = model(X_batch)
+            y_pred = torch.argmax(logits, dim=1).cpu().numpy()
+            Y_pred.append(y_pred)
+
+    Y_pred = np.concatenate(Y_pred, axis=0)
+    Y_true = np.concatenate(Y_true, axis=0)
+
+    for cls in range(10):
+        cls_index = (Y_true == cls)
+        acc = np.mean(Y_pred[cls_index] == Y_true[cls_index])
+        print("Class {} Acc is {}".format(cls, acc))
+
+
+
+
+
 class mydataset(Dataset):
     def __init__(self, X, Y):
         self.Data = torch.Tensor(X)
