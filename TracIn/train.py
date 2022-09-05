@@ -78,11 +78,12 @@ def train_CNN_CIFAR10(epochs,
                       trainloader,
                       testloader,
                       seed=20220718, get_summary=False,
-                      load_path=None, save_path="model_weights/CNN_CIFAR10.pth"):
+                      load_path=None, save_path="model_weights/CNN_CIFAR10.pth",
+                      epoch_path=None):
     # setup
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
+    # torch.manual_seed(seed)
+    # torch.cuda.manual_seed(seed)
+    # torch.backends.cudnn.deterministic = True
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     if get_summary:
@@ -100,7 +101,7 @@ def train_CNN_CIFAR10(epochs,
     # train model
     optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
     loss_function = nn.CrossEntropyLoss()
-    print("Trained on {}".format(device))
+    print("Trained on {}, {} samples".format(device, len(trainloader.dataset.Label)))
     net.to(device)
 
     # initial
@@ -111,9 +112,7 @@ def train_CNN_CIFAR10(epochs,
         # evaluate test
         test_loss, test_acc = get_loss_acc(net, testloader, loss_function)
 
-    print("Epoch{}/{}  train loss: {}  test loss: {}  train acc: {}  test acc: {}".format(0, epochs,
-                                                                                          train_loss, test_loss,
-                                                                                          train_acc, test_acc))
+
 
     best_test_acc = 0
     for epoch in range(epochs):
@@ -154,7 +153,9 @@ def train_CNN_CIFAR10(epochs,
             torch.save(net.state_dict(), save_path)
             print("Saved")
 
-        torch.save(net.state_dict(), "model_weights/weights_wrong_70epochs/CNN_CIFAR10_epoch{}.pth".format(epoch+1))
+        if epoch_path:
+            torch.save(net.state_dict(),
+                       epoch_path.format(epoch+1))
 
     if get_summary:
         return summary
@@ -164,7 +165,8 @@ def train_Resnet_CIFAR10(epochs,
                          trainloader,
                          testloader,
                          seed=20220718, get_summary=False,
-                         load_path=None, save_path="model_weights(Resnet50)/Resnet_CIFAR10.pth"):
+                         load_path=None, save_path="model_weights(Resnet50)/Resnet_CIFAR10.pth",
+                         epoch_path=None):
     # set up
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -249,8 +251,9 @@ def train_Resnet_CIFAR10(epochs,
 
         scheduler.step()
 
-        torch.save(net.state_dict(),
-                   "F:/interpretable machine learning/model_weights(Resnet50)/weights_200epochs(Resnet50)/Resnet50_epoch{}.pth".format(epoch+1))
+        if epoch_path:
+            torch.save(net.state_dict(),
+                       epoch_path.format(epoch+1))
 
     if get_summary:
         return summary
@@ -259,6 +262,7 @@ def train_Resnet_CIFAR10(epochs,
 
 
 if __name__ == "__main__":
-    trainloader, valloader, testloader = prepare_CIFAR10(img_size=224)
-    save_path = "F:/interpretable machine learning/model_weights(Resnet50)/Resnet50_CIFAR10.pth"
-    train_Resnet_CIFAR10(200, trainloader, valloader, save_path=save_path)
+    trainloader, valloader, testloader = prepare_CIFAR10()
+    save_path = "experiment10/model_weights_70epochs/CNN_CIFAR10.pth"
+    epoch_path = "experiment10/model_weights_70epochs/CNN_CIFAR10_epoch{}.pth"
+    train_CNN_CIFAR10(100, trainloader, valloader, seed=20220830, save_path=save_path, epoch_path=epoch_path)

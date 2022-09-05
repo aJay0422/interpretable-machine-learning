@@ -13,6 +13,9 @@ from data import prepare_CIFAR10, mydataset
 from train import train_CNN_CIFAR10
 
 
+LABEL_DECODER = ["airplane", "automobile", "bird", "cat", "deer",
+                 "dog", "frog", "horse", "ship", "truck"]
+
 def ST_check():
     """
     检查不同样本量下ST中各类别样本个数
@@ -301,7 +304,7 @@ def save_TracIn2(ckpts=[20, 40, 60], SV_mode="random"):
                                          Y_train, Y_val)
         print(f"checkpoint {i} finished")
 
-    np.savez(f"experiment7/TracIn_random_20_40_60_all.npz", TracIn_all=TracIn_all)
+    np.savez(f"experiment7/TracIn_random_{ckpts[0]}_{ckpts[1]}_{ckpts[2]}_all.npz", TracIn_all=TracIn_all)
 
 
 
@@ -400,15 +403,17 @@ def experiment():
                                   save_path=save_path)
 
 
-def experiment_random_keep(keep_ratios=[0.1, 0.2, 0.4, 0.6, 0.8]):
+def experiment_random_keep(seed=42, keep_ratios=[0.1, 0.2, 0.4, 0.6, 0.8]):
     experiment_path = "experiment7/random_keep/"
     if not os.path.exists(experiment_path):
         os.mkdir(experiment_path)
     trainloader, valloader, testloader = prepare_CIFAR10()
     for keep_ratio in keep_ratios:
         for i in range(5):
+            this_seed = seed + i
             n_train = len(trainloader.dataset.Label)
             n_keep = int(n_train * keep_ratio)
+            np.random.seed(this_seed)
             keep_index = list(np.random.permutation(n_train)[:n_keep])
             X_train_keep = trainloader.dataset.Data[keep_index]
             Y_train_keep = trainloader.dataset.Label[keep_index]
@@ -416,7 +421,7 @@ def experiment_random_keep(keep_ratios=[0.1, 0.2, 0.4, 0.6, 0.8]):
                                           batch_size=256, shuffle=True)
 
             save_path = experiment_path + f"CNN_CIFAR10_rndkeep{keep_ratio}_{i+1}.path"
-            train_CNN_CIFAR10(70, trainloader_keep, valloader, save_path=save_path)
+            train_CNN_CIFAR10(70, trainloader_keep, valloader, seed=20220718+i, save_path=save_path)
 
 
 def evaluation():
@@ -439,8 +444,8 @@ def evaluation():
             accs[i, j] = acc
     accs_all["random"] = accs
 
-    MV = ["high", "low", "random"]
-    MT = ["high", "low", "mid"]
+    MV = ["random"]
+    MT = ["high", "mid", "low"]
     for mv in MV:
         for mt in MT:
             name = mv + " " + mt
@@ -455,7 +460,7 @@ def evaluation():
                 accs[i] = acc
             accs_all[name] = accs
 
-    fig = plt.figure(figsize=(15, 15))
+    fig = plt.figure(figsize=(10, 10))
     plt.plot(keep_ratios, np.mean(accs_all["random"], axis=1), label="random")
     print("random")
     print(accs_all["random"])
@@ -465,6 +470,8 @@ def evaluation():
             plt.plot(keep_ratios, accs_all[name], ".-", label=name)
             print(name)
             print(accs_all[name])
+    plt.xlabel("Keep Ratio")
+    plt.ylabel("Test Accuracy")
     plt.legend()
     plt.show()
 
@@ -607,6 +614,49 @@ def evaluation_ckpts(ckpts="1_2_3"):
     plt.title("ckpts from {}".format(ckpts))
     plt.legend()
     plt.show()
+
+
+def evaluation_ckpts2(settings=["1_2_3",
+                               "5_15_25",
+                               "10_16_20",
+                               "16_20_22",
+                               "20_40_60",
+                               "20_43_45"]):
+    keep_ratios = [0.1, 0.2, 0.4, 0.6, 0.8, 1]
+    accs_all = {}
+    trainloader, valloader, testloader = prepare_CIFAR10()
+
+    # get baseline acc
+    net = CNN_CIFAR10().to(device)
+    net.load_state_dict(torch.load("model_weights/CNN_CIFAR10.pth", map_location=device))
+    _, baseline_acc = get_loss_acc(net, testloader)
+
+    # get random keep accuracy
+    accs = np.zeros(len(keep_ratios))
+    accs[-1] = baseline_acc
+    for i, keep_ratio in enumerate(keep_ratios[:-1]):
+        net.load_state_dict(torch.load(f"experiment7/random_keep/CNN_CIFAR10_rndkeep{keep_ratio}_1.path", map_location=device))
+        _, acc = get_loss_acc(net, testloader)
+        accs[i] = acc
+    accs_all["random"] = accs
+
+    MT = ["high", "mid"]
+    for mt in MT:
+        for setting in settings:
+            accs = np.zeros(len(keep_ratios))
+            accs[-1] = baseline_acc
+            for i, keep_ratio in enumerate(keep_ratios[:-1]):
+                load_path = f"experiment7/diff_ckpts/CNN_CIFAR10_{setting}_random_{mt}_{keep_ratio}.pth"
+                net.load_state_dict(torch.load(load_path, map_location=device))
+                _, acc = get_loss_acc(net, testloader)
+                accs[i] = acc
+            accs_all[setting] = accs
+        fig = plt.figure(figsize=(10, 10))
+        for name in accs_all.keys():
+            plt.plot(keep_ratios, accs_all[name], ".-", label=name)
+        plt.title(f"Method for SV: {mt}")
+        plt.legend()
+        plt.show()
 
 
 def experiment_strategy():
@@ -762,27 +812,137 @@ def experiment_TracIn_all():
         print(len(selected_index), keep_ratio)
         X_selected = X_train[selected_index]
         Y_selected = Y_train[selected_index]
-        plt.hist(Y_selected)
-        plt.title("Keep Ratio is {}".format(keep_ratio))
+        # plt.hist(Y_selected)
+        # plt.title("Keep Ratio is {}".format(keep_ratio))
+        # plt.show()
+
+        # create a new trainloader
+        selected_trainset = mydataset(X_selected, Y_selected)
+        selected_trainloader = DataLoader(selected_trainset,
+                                          batch_size=256,
+                                          shuffle=True)
+
+        # train model and save checkpoints
+        save_path = experiment_path + f"/CNN_CIFAR10_TracIN_all_{keep_ratio}.pth"
+        train_CNN_CIFAR10(70, selected_trainloader, valloader,
+                          save_path=save_path)
+
+
+def save_loss_reduction_ratio():
+    trainloader, valloader, testloader = prepare_CIFAR10()
+    loss_epoch = []
+    net = CNN_CIFAR10().to(device)
+    for i in range(1, 71):
+        net.load_state_dict(torch.load(f"model_weights/weights_70epochs/CNN_CIFAR10_epoch{i}.pth",
+                                       map_location=device))
+        loss, acc = get_loss_acc(net, trainloader)
+        loss_epoch.append(loss)
+
+    np.save("model_weights/weights_70epochs/loss_by_epoch.npy", loss_epoch)
+    loss_reduction_ratio = (-np.diff(loss_epoch) / loss_epoch[:-1])
+    np.save("model_weights/weights_70epochs/loss_reduction_ratio_by_epoch.npy", loss_reduction_ratio)
+    plt.plot(np.arange(1, 71), loss_epoch)
+    plt.show()
+    print(np.argsort(loss_reduction_ratio)[::-1])
+
+
+def eyeball_highTracIn(mode="by class"):
+    trainloader, valloader, testloader = prepare_CIFAR10()
+    X_train = trainloader.dataset.Data
+    Y_train = trainloader.dataset.Label
+
+    if mode == "by class":
+        TracIn_by_cls = np.load("experiment7/TracIn_random_20_40_60.npz", allow_pickle=True)["TracIn_by_cls"].item()
+        fig, ax = plt.subplots(10, 10, figsize=(20, 20))
+        for cls in range(10):
+            TracIn_cls = TracIn_by_cls[cls]
+            X_train_cls = X_train[Y_train == cls]
+            plot_index = np.argsort(np.mean(TracIn_cls, axis=1))[:10]
+            for i in range(10):
+                image = np.transpose(X_train_cls[plot_index[i]], (1, 2, 0))
+                ax[cls, i].imshow(image / 255)
+
+        plt.show()
+    elif mode == "all":
+        TracIn_all = np.load("experiment7/TracIn_random_20_40_60_all.npz", allow_pickle=True)["TracIn_all"]
+        selected_val = np.load("experiment7/SV_random.npz", allow_pickle=True)
+        Y_val = selected_val["Y"]
+        print(Y_val)
+        print(TracIn_all.shape)
+        fig, ax = plt.subplots(10, 10, figsize=(20, 20))
+        for cls in range(10):
+            TracIn_cls = TracIn_all[:, (Y_val == cls)]
+            plot_index = np.argsort(np.mean(TracIn_cls, axis=1))[::-1][:10]
+            for i in range(10):
+                if i == 0:
+                    ax[cls, i].set_ylabel(LABEL_DECODER[cls], rotation=90)
+                image = np.transpose(X_train[plot_index[i]], (1, 2, 0)) / 255
+                ax[cls, i].imshow(image)
+                ax[cls, i].title.set_text(LABEL_DECODER[Y_train[plot_index[i]]])
+                ax[cls, i].get_xaxis().set_visible(False)
+                if i != 0:
+                    ax[cls, i].get_yaxis().set_visible(False)
+        plt.legend()
         plt.show()
 
-        # # create a new trainloader
-        # selected_trainset = mydataset(X_selected, Y_selected)
-        # selected_trainloader = DataLoader(selected_trainset,
-        #                                   batch_size=256,
-        #                                   shuffle=True)
-        #
-        # # train model and save checkpoints
-        # save_path = experiment_path + f"/CNN_CIFAR10_TracIN_all_{keep_ratio}.pth"
-        # train_CNN_CIFAR10(70, selected_trainloader, valloader,
-        #                   save_path=save_path)
+
+def poison_model(ckpts="1_2_3"):
+    trainloader, valloader, testloader = prepare_CIFAR10()
+    X_train = trainloader.dataset.Data
+    Y_train = trainloader.dataset.Label
+    TracIn_by_cls = np.load(f"experiment7/TracIn_random_{ckpts}.npz", allow_pickle=True)["TracIn_by_cls"].item()
+    keep_ratios = [0.1, 0.2, 0.3, 0.4]
+
+    for keep_ratio in keep_ratios:
+        X_poison = []
+        Y_poison = []
+        n_keep = int(40000 * keep_ratio)
+        n_keep_cls = n_keep // 10
+        for cls in range(10):
+            TracIn = TracIn_by_cls[cls]
+            keep_index = list(np.argsort(np.mean(TracIn, axis=1))[::-1][:n_keep_cls])
+            X_poison.append(X_train[Y_train == cls][keep_index])
+            Y_poison.append(Y_train[Y_train == cls][keep_index])
+        X_poison = np.concatenate(X_poison, axis=0)
+        Y_poison = np.concatenate(Y_poison, axis=0)
+        trainloader_poison = DataLoader(mydataset(X_poison, Y_poison),
+                                        batch_size=256, shuffle=True)
+        load_path = "model_weights/CNN_CIFAR10.pth"
+        save_path = f"experiment7/model_poison/CNN_CIFAR10_{ckpts}_{keep_ratio}.pth"
+        train_CNN_CIFAR10(70, trainloader_poison, valloader, load_path=load_path, save_path=save_path)
+
+
+def evaluate_poison(ckpts="1_2_3"):
+    net = CNN_CIFAR10().to(device)
+    trainloader, valloader, testloader = prepare_CIFAR10()
+
+    # get baseline acc
+    net.load_state_dict(torch.load("model_weights/CNN_CIFAR10.pth", map_location=device))
+    _, baseline_acc = get_loss_acc(net, testloader)
+
+    # get dropped acc
+    keep_ratios = [0.1, 0.2, 0.3, 0.4]
+    accs = []
+    for keep_ratio in keep_ratios:
+        model_path = f"experiment7/model_poison/CNN_CIFAR10_{ckpts}_{keep_ratio}.pth"
+        net.load_state_dict(torch.load(model_path, map_location=device))
+        _, acc = get_loss_acc(net, testloader)
+        accs.append(acc)
+
+    plt.plot(keep_ratios, [baseline_acc for i in range(4)], "--", label="Baseline")
+    plt.plot(keep_ratios, accs, ".-", label="Poisoned")
+    plt.xlabel("keep ratio")
+    plt.ylabel("test accuracy")
+    plt.legend()
+    plt.show()
 
 
 if __name__ == "__main__":
-    # experiment_TracIn_all()
-    trainloader, valloader, testloader = prepare_CIFAR10()
-    net = CNN_CIFAR10().to(device)
-    net.load_state_dict(torch.load("model_weights/CNN_CIFAR10.pth", map_location=device))
-    get_acc_by_cls(net, testloader)
-    net.load_state_dict(torch.load("experiment7/from_beginning(loss)/randomhigh0.8/CNN_CIFAR10.pth", map_location=device))
-    get_acc_by_cls(net, testloader)
+    # net = CNN_CIFAR10().to(device)
+    # trainloader, valloader, testloader = prepare_CIFAR10()
+    # for i in range(1, 6):
+    #     net.load_state_dict(torch.load(f"experiment7/random_keep/CNN_CIFAR10_rndkeep0.1_1.path", map_location=device))
+    #     accs = get_acc_by_cls(net, testloader)
+    #     print(accs)
+
+    experiment_random_keep()

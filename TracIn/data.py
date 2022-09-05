@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -116,6 +117,13 @@ def prepare_CIFAR10(img_size=32, mode="tvt"):
     print(len(X_train), len(X_val), len(X_test))
     return trainloader, valloader, testloader
 
+
+def prepare_SVloader():
+    selected_val = np.load("experiment7/SV_random.npz", allow_pickle=True)
+    X_sv = selected_val["X"]
+    Y_sv = selected_val["Y"]
+    SVloader = DataLoader(mydataset(X_sv, Y_sv), batch_size=20, shuffle=False)
+    return SVloader
 
 
 

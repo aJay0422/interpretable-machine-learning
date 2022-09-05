@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import torch.nn as nn
+from matplotlib import pyplot as plt
 from torch.utils.data import Dataset
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -16,7 +17,11 @@ def get_loss_acc(model, dataloader, criterion=nn.CrossEntropyLoss()):
     num_batches = 0
     model.eval()
     with torch.no_grad():
-        for X_batch, Y_batch in dataloader:
+        for batch in dataloader:
+            X_batch = batch[0]
+            Y_batch = batch[1]
+            if len(batch) == 3:
+                index_batch = batch[2]
             X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
             total += len(Y_batch)
             num_batches += 1
@@ -47,10 +52,14 @@ def get_acc_by_cls(model, dataloader, criterion=nn.CrossEntropyLoss()):
     Y_pred = np.concatenate(Y_pred, axis=0)
     Y_true = np.concatenate(Y_true, axis=0)
 
+    accs = []
     for cls in range(10):
         cls_index = (Y_true == cls)
         acc = np.mean(Y_pred[cls_index] == Y_true[cls_index])
-        print("Class {} Acc is {}".format(cls, acc))
+        accs.append(acc)
+        # print("Class {} Acc is {}".format(cls, acc))
+
+    return accs
 
 
 
