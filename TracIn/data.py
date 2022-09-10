@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 import torchvision
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
@@ -62,10 +62,12 @@ def dataset_category_get(category_num):
     return img_all_train, img_all_test
 
 
-def prepare_CIFAR10(img_size=32, mode="tvt"):
+def prepare_CIFAR10(img_size=32, mode="tvt", train_shuffle=True):
     if img_size == 32:
         data_transform = {
-            "train": transforms.Compose([transforms.ToTensor(),
+            "train": transforms.Compose([transforms.RandomCrop(32, padding=4),
+                                         transforms.RandomHorizontalFlip(),
+                                         transforms.ToTensor(),
                                          transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]),
             "val": transforms.Compose([transforms.ToTensor(),
                                        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
@@ -87,35 +89,28 @@ def prepare_CIFAR10(img_size=32, mode="tvt"):
                                              download=False, transform=data_transform["train"])
     test_set = torchvision.datasets.CIFAR10(root="datasets/CIFAR10/", train=False,
                                             download=False, transform=data_transform["val"])
-    X_train = train_set.data.transpose((0, 3, 1, 2))
-    X_test = test_set.data.transpose((0, 3, 1, 2))
-    Y_train = train_set.targets
-    Y_test = test_set.targets
+
 
     if mode == "tt":
-        train_set = mydataset(X_train, Y_train)
-        test_set = mydataset(X_test, Y_test)
-        trainloader = DataLoader(train_set, batch_size=256,
-                                 shuffle=True)
+        # train_set = mydataset(X_train, Y_train)
+        # test_set = mydataset(X_test, Y_test)
+        trainloader = DataLoader(train_set, batch_size=128,
+                                 shuffle=train_shuffle)
         testloader = DataLoader(test_set, batch_size=64,
                                 shuffle=False)
-        print(len(X_train), len(X_test))
+        print("{} train samples, {} test samples".format(len(train_set.targets), len(test_set.targets)))
         return trainloader, testloader
-
-    X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, stratify=Y_train, test_size=0.2, random_state=42)   # split 10000 validation data
-
-    train_set = mydataset(X_train, Y_train)
-    val_set = mydataset(X_val, Y_val)
-    test_set = mydataset(X_test, Y_test)
-
-    trainloader = DataLoader(train_set, batch_size=256,
-                             shuffle=True)
-    valloader = DataLoader(val_set, batch_size=64,
-                           shuffle=False)
-    testloader = DataLoader(test_set, batch_size=64,
-                            shuffle=False)
-    print(len(X_train), len(X_val), len(X_test))
-    return trainloader, valloader, testloader
+    elif mode == "tvt":
+        torch.manual_seed(42)
+        train_set, val_set = random_split(train_set, [40000, 10000])
+        trainloader = DataLoader(train_set, batch_size=128,
+                                 shuffle=train_shuffle)
+        valloader = DataLoader(val_set, batch_size=64,
+                               shuffle=False)
+        testloader = DataLoader(test_set, batch_size=64,
+                                shuffle=False)
+        print("{} train samples, {} validation samples, {} test samples".format(len(train_set.indices), len(val_set.indices), len(test_set.targets)))
+        return trainloader, valloader, testloader
 
 
 def prepare_SVloader():

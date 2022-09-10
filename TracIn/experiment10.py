@@ -405,15 +405,15 @@ def check_label():
 
 
 
-def evaluate_TracIn_CosIn():
+def evaluate_TracIn_CosIn(sv_index):
     for epoch in range(1, 2):
         TracIn = np.load(f"experiment10/TracIn_by_class/TracIn_epoch{epoch}.npy", allow_pickle=True).item()
         CosIn = np.load(f"experiment10/TracIn_by_class_cosine/TracIn_epoch{epoch}.npy", allow_pickle=True).item()
         TracIn_scores = []
         CosIn_scores = []
         for cls in range(10):
-            TracIn_scores.append(TracIn[cls].reshape(-1))
-            CosIn_scores.append(CosIn[cls].reshape(-1))
+            TracIn_scores.append(TracIn[cls][:,sv_index].reshape(-1))
+            CosIn_scores.append(CosIn[cls][:,sv_index].reshape(-1))
         for cls in range(10):
             corr_cls = np.corrcoef(TracIn_scores[cls], CosIn_scores[cls])[0,1]
             print(f"Correlation of class {cls} is {corr_cls}")
@@ -499,7 +499,7 @@ if __name__ == "__main__":
     # experiment(ratio=0.6, mode="mid", cosine=True)
     # experiment(ratio=0.8, mode="mid", cosine=True)
 
-    evaluation_CosIn()
+    # evaluation_CosIn()
 
 
     # CosIn_epoch1 = np.load("experiment10/TracIn_by_class_cosine/TracIn_epoch1.npy",
@@ -510,5 +510,5 @@ if __name__ == "__main__":
     #                        allow_pickle=True).item()
     # stop = None
 
-    # evaluate_TracIn_CosIn()
+    evaluate_TracIn_CosIn(3)
     # save_TracIn(cosine=True)
