@@ -259,8 +259,6 @@ def train_Resnet_CIFAR10(epochs,
         return summary
 
 
-
-
 if __name__ == "__main__":
     trainloader, valloader, testloader = prepare_CIFAR10()
     save_path = "experiment10/model_weights_70epochs/CNN_CIFAR10.pth"
