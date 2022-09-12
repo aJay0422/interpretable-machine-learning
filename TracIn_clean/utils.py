@@ -132,7 +132,7 @@ def prepare_CIFAR10(img_size=32, mode="tvt", train_shuffle=True):
         print("{} train samples, {} test samples".format(len(train_set.targets), len(test_set.targets)))
         return trainloader, testloader
     elif mode == "tvt":
-        X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, test_size=0.2, random_state=42)
+        X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, stratify=Y_train, test_size=0.2, random_state=42)
         train_set = mydataset(X_train, Y_train)
         val_set = mydataset(X_val, Y_val)
         test_set = mydataset(X_test, Y_test)

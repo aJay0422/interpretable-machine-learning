@@ -150,5 +150,6 @@ def evaluate_random_drop(keep_ratios=[0.1, 0.2, 0.4, 0.6, 0.8]):
 
 
 
+
 if __name__ == "__main__":
     evaluate_random_drop()

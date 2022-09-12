@@ -56,8 +56,10 @@ def check_similarity_by_class():
             cls_i_idx = (Y_train == i)
             cls_j_idx = (Y_train == j)
             sim = similarity[cls_i_idx][:, cls_j_idx]
-            if i == 0 and j == 0:
-                print(sim)
+            # if i == 0 and j == 0:
+            #     plt.hist(sim.reshape(-1))
+            #     plt.show()
+            #     return None
             average_similarity_by_class[i,j] = np.mean(sim)
             average_similarity_by_class[j,i] = np.mean(sim)
     ax = sns.heatmap(average_similarity_by_class, linewidth=0.5)
@@ -65,6 +67,13 @@ def check_similarity_by_class():
     print(average_similarity_by_class)
 
 
+def similarity_dist():
+    similarity = np.load("experiment11/cosine_similarity_40000train.npy")
+    similarity = similarity.reshape(-1)
+    plot_index = (similarity < 0.1) | (similarity > 0.6)
+    plt.hist(similarity[plot_index], bins=30)
+    plt.show()
+
 
 if __name__ == "__main__":
-    check_similarity_by_class()
+    similarity_dist()

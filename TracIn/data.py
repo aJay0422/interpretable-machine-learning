@@ -90,10 +90,27 @@ def prepare_CIFAR10(img_size=32, mode="tvt", train_shuffle=True):
     test_set = torchvision.datasets.CIFAR10(root="datasets/CIFAR10/", train=False,
                                             download=False, transform=data_transform["val"])
 
+    X_train = train_set.data
+    Y_train = train_set.targets
+    X_test = test_set.data
+    Y_test = test_set.targets
+
+    # Normalize data
+    ## Convert to [0,1]
+    X_train = X_train / 255.
+    X_test = X_test / 255.
+    ## Standardize data
+    m = np.array([0.485, 0.456, 0.406]).reshape(1, 1, 1, -1)
+    v = np.array([0.229, 0.224, 0.225]).reshape(1, 1, 1, -1)
+    X_train = (X_train - m) / v
+    X_test = (X_test - m) / v
+    ## switch channel to the 2nd dimension
+    X_train = np.transpose(X_train, (0, 3, 1, 2))
+    X_test = np.transpose(X_test, (0, 3, 1, 2))
 
     if mode == "tt":
-        # train_set = mydataset(X_train, Y_train)
-        # test_set = mydataset(X_test, Y_test)
+        train_set = mydataset(X_train, Y_train)
+        test_set = mydataset(X_test, Y_test)
         trainloader = DataLoader(train_set, batch_size=128,
                                  shuffle=train_shuffle)
         testloader = DataLoader(test_set, batch_size=64,
@@ -101,15 +118,19 @@ def prepare_CIFAR10(img_size=32, mode="tvt", train_shuffle=True):
         print("{} train samples, {} test samples".format(len(train_set.targets), len(test_set.targets)))
         return trainloader, testloader
     elif mode == "tvt":
-        torch.manual_seed(42)
-        train_set, val_set = random_split(train_set, [40000, 10000])
+        X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, stratify=Y_train, test_size=0.2, random_state=42)
+        train_set = mydataset(X_train, Y_train)
+        val_set = mydataset(X_val, Y_val)
+        test_set = mydataset(X_test, Y_test)
         trainloader = DataLoader(train_set, batch_size=128,
                                  shuffle=train_shuffle)
         valloader = DataLoader(val_set, batch_size=64,
                                shuffle=False)
         testloader = DataLoader(test_set, batch_size=64,
                                 shuffle=False)
-        print("{} train samples, {} validation samples, {} test samples".format(len(train_set.indices), len(val_set.indices), len(test_set.targets)))
+        print("{} train samples, {} validation samples, {} test samples".format(len(train_set.Label),
+                                                                                len(val_set.Label),
+                                                                                len(test_set.Label)))
         return trainloader, valloader, testloader
 
 
@@ -123,7 +144,7 @@ def prepare_SVloader():
 
 
 if __name__ == "__main__":
-    train1, val1, test2 = prepare_CIFAR10()
+    train1, val1, test1 = prepare_CIFAR10()
     train2, val2, test2 = prepare_CIFAR10()
 
     stop = None
